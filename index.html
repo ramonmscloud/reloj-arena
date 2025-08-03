@@ -329,10 +329,13 @@
                 this.isRunning = false;
                 this.isPaused = false;
                 this.interval = null;
+                this.audioContext = null;
+                this.audioInitialized = false;
                 
                 this.initElements();
                 this.bindEvents();
                 this.updateDisplay();
+                this.initAudio();
             }
 
             initElements() {
@@ -351,11 +354,21 @@
             }
 
             bindEvents() {
-                this.playBtn.addEventListener('click', () => this.start());
+                this.playBtn.addEventListener('click', () => {
+                    this.initAudioContext();
+                    this.start();
+                });
                 this.pauseBtn.addEventListener('click', () => this.pause());
                 this.resetBtn.addEventListener('click', () => this.reset());
-                this.testSoundBtn.addEventListener('click', () => this.playCompletionSound());
+                this.testSoundBtn.addEventListener('click', () => {
+                    this.initAudioContext();
+                    this.playCompletionSound();
+                });
                 this.timeInput.addEventListener('change', (e) => this.setTime(e.target.value));
+                
+                // Inicializar audio en el primer toque/click (requerido por iOS)
+                document.addEventListener('touchstart', () => this.initAudioContext(), { once: true });
+                document.addEventListener('click', () => this.initAudioContext(), { once: true });
             }
 
             setTime(minutes) {
@@ -482,17 +495,71 @@
                 });
             }
 
-            stopParticles() {
-                this.particles.forEach(particle => {
-                    particle.classList.remove('active');
-                });
+            initAudio() {
+                // Intentar inicializar el contexto de audio
+                this.initAudioContext();
+            }
+
+            initAudioContext() {
+                if (this.audioInitialized) return;
+                
+                try {
+                    // Crear contexto de audio
+                    this.audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                    
+                    // iOS requiere que el contexto se "resume" después de una interacción del usuario
+                    if (this.audioContext.state === 'suspended') {
+                        this.audioContext.resume().then(() => {
+                            console.log('Audio context resumed');
+                            this.audioInitialized = true;
+                        }).catch(e => {
+                            console.log('Error resuming audio context:', e);
+                        });
+                    } else {
+                        this.audioInitialized = true;
+                    }
+                    
+                    // Reproducir un sonido silencioso para "despertar" el audio en iOS
+                    this.playTestSound();
+                    
+                } catch (error) {
+                    console.log('Audio no disponible:', error);
+                    this.audioContext = null;
+                }
+            }
+
+            playTestSound() {
+                if (!this.audioContext) return;
+                
+                try {
+                    const oscillator = this.audioContext.createOscillator();
+                    const gainNode = this.audioContext.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(this.audioContext.destination);
+                    
+                    oscillator.frequency.setValueAtTime(440, this.audioContext.currentTime);
+                    gainNode.gain.setValueAtTime(0, this.audioContext.currentTime); // Silencioso
+                    
+                    oscillator.start(this.audioContext.currentTime);
+                    oscillator.stop(this.audioContext.currentTime + 0.1);
+                } catch (error) {
+                    console.log('Error en test sound:', error);
+                }
             }
 
             playCompletionSound() {
+                if (!this.audioContext || !this.audioInitialized) {
+                    console.log('Audio no inicializado');
+                    return;
+                }
+
                 try {
-                    // Crear contexto de audio
-                    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                    
+                    // Asegurar que el contexto esté activo
+                    if (this.audioContext.state === 'suspended') {
+                        this.audioContext.resume();
+                    }
+
                     // Definir las notas de campanilla (en Hz) - melodía alegre
                     const bellNotes = [
                         523.25, // C5
@@ -507,49 +574,51 @@
                     // Reproducir cada nota secuencialmente
                     bellNotes.forEach((frequency, index) => {
                         setTimeout(() => {
-                            this.playBellNote(audioContext, frequency, 0.8);
+                            this.playBellNote(frequency, 0.8);
                         }, index * 200);
                     });
 
                     // Tocar campanadas finales más fuertes
                     setTimeout(() => {
-                        this.playBellNote(audioContext, 1046.50, 1.5); // C6
+                        this.playBellNote(1046.50, 1.5); // C6
                     }, bellNotes.length * 200);
 
                     setTimeout(() => {
-                        this.playBellNote(audioContext, 1046.50, 1.5); // C6
+                        this.playBellNote(1046.50, 1.5); // C6
                     }, (bellNotes.length * 200) + 300);
 
                 } catch (error) {
-                    console.log('Audio no disponible:', error);
+                    console.log('Error reproduciendo campanillas:', error);
                 }
             }
 
-            playBellNote(audioContext, frequency, duration) {
+            playBellNote(frequency, duration) {
+                if (!this.audioContext || !this.audioInitialized) return;
+
                 try {
                     // Crear oscilador para la nota fundamental
-                    const oscillator = audioContext.createOscillator();
-                    const gainNode = audioContext.createGain();
+                    const oscillator = this.audioContext.createOscillator();
+                    const gainNode = this.audioContext.createGain();
                     
                     // Crear armónicos para sonido más realista de campanilla
-                    const oscillator2 = audioContext.createOscillator();
-                    const gainNode2 = audioContext.createGain();
+                    const oscillator2 = this.audioContext.createOscillator();
+                    const gainNode2 = this.audioContext.createGain();
                     
-                    const oscillator3 = audioContext.createOscillator();
-                    const gainNode3 = audioContext.createGain();
+                    const oscillator3 = this.audioContext.createOscillator();
+                    const gainNode3 = this.audioContext.createGain();
 
                     // Configurar osciladores
                     oscillator.type = 'sine';
-                    oscillator.frequency.setValueAtTime(frequency, audioContext.currentTime);
+                    oscillator.frequency.setValueAtTime(frequency, this.audioContext.currentTime);
                     
                     oscillator2.type = 'sine';
-                    oscillator2.frequency.setValueAtTime(frequency * 2, audioContext.currentTime); // Octava
+                    oscillator2.frequency.setValueAtTime(frequency * 2, this.audioContext.currentTime); // Octava
                     
                     oscillator3.type = 'sine';
-                    oscillator3.frequency.setValueAtTime(frequency * 3, audioContext.currentTime); // Quinta
+                    oscillator3.frequency.setValueAtTime(frequency * 3, this.audioContext.currentTime); // Quinta
 
                     // Configurar envolvente (ataque rápido, decaimiento lento como campanilla)
-                    const now = audioContext.currentTime;
+                    const now = this.audioContext.currentTime;
                     
                     gainNode.gain.setValueAtTime(0, now);
                     gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
@@ -568,9 +637,9 @@
                     oscillator2.connect(gainNode2);
                     oscillator3.connect(gainNode3);
                     
-                    gainNode.connect(audioContext.destination);
-                    gainNode2.connect(audioContext.destination);
-                    gainNode3.connect(audioContext.destination);
+                    gainNode.connect(this.audioContext.destination);
+                    gainNode2.connect(this.audioContext.destination);
+                    gainNode3.connect(this.audioContext.destination);
 
                     // Iniciar y detener osciladores
                     oscillator.start(now);
@@ -584,6 +653,12 @@
                 } catch (error) {
                     console.log('Error reproduciendo nota:', error);
                 }
+            }
+
+            stopParticles() {
+                this.particles.forEach(particle => {
+                    particle.classList.remove('active');
+                });
             }
         }
 
