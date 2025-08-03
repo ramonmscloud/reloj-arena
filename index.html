@@ -280,6 +280,17 @@
                 opacity: 0;
             }
         }
+
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                text-shadow: 0 2px 10px rgba(0,0,0,0.3);
+            }
+            50% {
+                transform: scale(1.05);
+                text-shadow: 0 4px 20px rgba(255,255,255,0.8);
+            }
+        }
     </style>
 </head>
 <body>
@@ -351,6 +362,7 @@
                 this.progressFill = document.getElementById('progressFill');
                 this.hourglassContainer = document.getElementById('hourglassContainer');
                 this.particles = document.querySelectorAll('.particle');
+                this.title = document.querySelector('.title');
             }
 
             bindEvents() {
@@ -393,6 +405,9 @@
                 this.hourglassContainer.classList.add('running');
                 this.sandStream.classList.add('active');
                 this.startParticles();
+
+                // Reproducir sonido de inicio (una sola campanada)
+                this.playStartSound();
 
                 this.interval = setInterval(() => {
                     this.remainingTime--;
@@ -458,13 +473,21 @@
                     navigator.vibrate([200, 100, 200]);
                 }
 
-                // Notificación visual
+                // Notificación visual (sin alert)
                 document.body.style.background = 'linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%)';
                 setTimeout(() => {
                     document.body.style.background = 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)';
-                }, 1000);
+                }, 2000);
 
-                alert('¡Tiempo completado! 🔔');
+                // Cambiar temporalmente el título
+                const originalTitle = this.title.textContent;
+                this.title.textContent = '🎉 ¡Tiempo Completado! 🎉';
+                this.title.style.animation = 'pulse 1s infinite';
+                
+                setTimeout(() => {
+                    this.title.textContent = originalTitle;
+                    this.title.style.animation = '';
+                }, 3000);
             }
 
             updateDisplay() {
@@ -545,6 +568,26 @@
                     oscillator.stop(this.audioContext.currentTime + 0.1);
                 } catch (error) {
                     console.log('Error en test sound:', error);
+                }
+            }
+
+            playStartSound() {
+                if (!this.audioContext || !this.audioInitialized) {
+                    console.log('Audio no inicializado para sonido de inicio');
+                    return;
+                }
+
+                try {
+                    // Asegurar que el contexto esté activo
+                    if (this.audioContext.state === 'suspended') {
+                        this.audioContext.resume();
+                    }
+
+                    // Reproducir una sola campanada de inicio (nota media)
+                    this.playBellNote(659.25, 1.2); // E5 - nota alegre de inicio
+
+                } catch (error) {
+                    console.log('Error reproduciendo sonido de inicio:', error);
                 }
             }
 
